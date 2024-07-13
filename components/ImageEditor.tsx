@@ -16,10 +16,12 @@ const ImageEditor: React.FC = () => {
   const [rect, setRect] = useState<Rect | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
+    console.log('Check this natural width',img,  canvas, img?.width);
     if (!canvas || !img) return;
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -37,23 +39,29 @@ const ImageEditor: React.FC = () => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDrawing || !rect) return;
-      const canvasRect = canvas.getBoundingClientRect();
-      const newWidth = e.clientX - canvasRect.left - rect.startX;
-      const newHeight = e.clientY - canvasRect.top - rect.startY;
-      const currentRect = {
-        ...rect,
-        width: newWidth,
-        height: newHeight
-      };
-      setRect(currentRect);
-      drawRectangle(ctx, currentRect);
+      if (isDrawing && rect) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const newWidth = e.clientX - canvasRect.left - rect.startX;
+        const newHeight = e.clientY - canvasRect.top - rect.startY;
+        const currentRect = {
+          ...rect,
+          width: newWidth,
+          height: newHeight
+        };
+        setRect(currentRect);
+        drawRectangle(ctx, currentRect);
+      } else if (isDragging) {
+        const canvasRect = canvas.getBoundingClientRect();
+      }
     };
 
     const handleMouseUp = () => {
       setIsDrawing(false);
+      setIsDragging(false);
       if (ctx && rect) {
-        adjustExposure(ctx, rect);
+        // Center the rectangle and apply exposure effect
+        applyEffects(ctx, rect);
+        setImageDataUrl(canvas.toDataURL()); // Set the image data URL
       }
     };
 
@@ -66,13 +74,13 @@ const ImageEditor: React.FC = () => {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [rect, isDrawing]);
+  }, [rect, isDrawing, isDragging]);
 
   const drawRectangle = (ctx: CanvasRenderingContext2D, rect: Rect) => {
     const img = imgRef.current;
     if (!img) return;
 
-    // Clear the canvas and redraw the image
+    // Draw the image on the canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -87,14 +95,17 @@ const ImageEditor: React.FC = () => {
     );
   };
 
-  const adjustExposure = (ctx: CanvasRenderingContext2D, rect: Rect) => {
+  const applyEffects = (ctx: CanvasRenderingContext2D, rect: Rect) => {
     const img = imgRef.current;
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    // Draw the original image
     ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
+    // Apply exposure effect to the original image outside the rectangle
     const imageData = ctx.getImageData(
       0,
       0,
@@ -112,29 +123,31 @@ const ImageEditor: React.FC = () => {
       for (let x = 0; x < ctx.canvas.width; x++) {
         if (x < startX || x > endX || y < startY || y > endY) {
           const index = (y * ctx.canvas.width + x) * 4;
-          data[index] = data[index] * 0.8; // Reducing exposure
-          data[index + 1] = data[index + 1] * 0.8; // Reducing exposure
-          data[index + 2] = data[index + 2] * 0.8; // Reducing exposure
+          data[index] = data[index] * 0.3; // Reducing exposure
+          data[index + 1] = data[index + 1] * 0.3; // Reducing exposure
+          data[index + 2] = data[index + 2] * 0.3; // Reducing exposure
         }
       }
     }
 
     ctx.putImageData(imageData, 0, 0);
-    setImageDataUrl(canvas.toDataURL()); // Save the image data URL
   };
 
   const handleImageLoad = () => {
     const img = imgRef.current;
+    console.log('Image loaded:', img?.width, img?.height);
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
     const updateCanvasSize = () => {
-      const aspectRatio = img.naturalWidth / img.naturalHeight;
+        console.log('page load');
+
+      const aspectRatio = img.width / img.height;
       const maxWidth = window.innerWidth * 0.9; // Maximum width as 90% of window width
       const maxHeight = window.innerHeight * 0.9; // Maximum height as 90% of window height
 
-      let newWidth = img.naturalWidth;
-      let newHeight = img.naturalHeight;
+      let newWidth = img.width;
+      let newHeight = img.height;
 
       if (newWidth > maxWidth) {
         newWidth = maxWidth;
@@ -146,15 +159,18 @@ const ImageEditor: React.FC = () => {
         newWidth = maxHeight * aspectRatio;
       }
 
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      canvas.style.width = `${newWidth}px`;
-      canvas.style.height = `${newHeight}px`;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      console.log('canvas width', canvas.width, canvas.height, img.width, img.height);
+      canvas.style.width = `${img.width}px`;
+      canvas.style.height = `${img.height}px`;
+
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        setImageDataUrl(canvas.toDataURL()); // Set the initial image data URL
       }
     };
 
@@ -168,18 +184,61 @@ const ImageEditor: React.FC = () => {
 
   const handleSaveImage = () => {
     if (!imageDataUrl) return;
+    if (!rect) {
+      alert('Please select a region to save the image.');
+      return;
+    }
+    console.log('Saving image...');
+    // Calculate the scaling factors
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    const scaleX = img.width / canvas.width;
+    const scaleY = img.height / canvas.height;
 
+    // ??? have to decide if i should scale the rect or not
+
+    // Scale the rect coordinates
+    // const scaledRect = {
+    //   startX: rect.startX * scaleX,
+    //   startY: rect.startY * scaleY,
+    //   width: rect.width * scaleX,
+    //   height: rect.height * scaleY
+    // };
+    console.log('Scaled rect:', rect, canvas.width, canvas.height);
     const link = document.createElement('a');
     link.href = imageDataUrl;
     link.download = 'edited-image.png';
-    link.click();
+    link.click(); 
   };
 
   const handleSaveToDB = async () => {
-    if (!imageDataUrl) return;
-    console.log(imageDataUrl, 'imageDataUrl')
+    console.log('Saving image to the database...');
+    if (!imageDataUrl || !rect) return;
+
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+
+    // Calculate the scaling factors
+    const scaleX = img.width / canvas.width;
+    const scaleY = img.height / canvas.height;
+
+    // Scale the rect coordinates
+    const scaledRect = {
+      startX: rect.startX * scaleX,
+      startY: rect.startY * scaleY,
+      width: rect.width * scaleX,
+      height: rect.height * scaleY
+    };
+
     try {
-      await axios.post('/api/save-image', { imageDataUrl });
+      await axios.post('/api/save-image', {
+        imageDataUrl,
+        rect: scaledRect,
+        imageWidth: img.width,
+        imageHeight: img.height
+      });
       alert('Image saved to the database successfully!');
     } catch (error) {
       console.error('Error saving image to database', error);
@@ -187,15 +246,16 @@ const ImageEditor: React.FC = () => {
     }
   };
 
+
   return (
     <div style={{ position: 'relative', maxWidth: '100%', margin: '0 auto' }}>
       <Image
         ref={imgRef}
-        src='https://images.unsplash.com/photo-1481349518771-20055b2a7b24?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzNjUyOXwwfDF8c2VhcmNofDF8fHJhbmRvbXxlbnwwfHx8fDE2NTY4MzMzOTI&ixlib=rb-1.2.1&q=80&w=1080'
+        src='https://res.cloudinary.com/ddue2t3ue/image/upload/fl_preserve_transparency/v1720882093/Nicky/Product-Page-Desktop_1_dxwlpu.jpg?_s=public-apps'
         alt='Editable'
         style={{ opacity: 0, position: 'absolute', top: 0, left: 0 }}
-        width={1080}
-        height={720}
+        width={1920}
+        height={1080}
         crossOrigin='anonymous'
         onLoad={handleImageLoad}
       />
@@ -205,7 +265,7 @@ const ImageEditor: React.FC = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          cursor: 'crosshair',
+          cursor: isDragging ? 'move' : 'crosshair',
           zIndex: 1
         }}
       />

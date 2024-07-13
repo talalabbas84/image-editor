@@ -6,6 +6,7 @@ export default function Home() {
     <div>
       <h1>Welcome to Image Editor</h1>
       <ImageEditor/>
+      {/* <VideoPlayer/> */}
     </div>
   );
 }
