@@ -1,5 +1,5 @@
 'use client';
-import axios from 'axios'; // Add this for making HTTP requests
+import axios from 'axios'; // For making HTTP requests
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
@@ -21,12 +21,12 @@ const ImageEditor: React.FC = () => {
   useEffect(() => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
-    console.log('Check this natural width',img,  canvas, img?.width);
     if (!canvas || !img) return;
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
+    // Handles the mouse down event to start drawing the rectangle
     const handleMouseDown = (e: MouseEvent) => {
       const canvasRect = canvas.getBoundingClientRect();
       setIsDrawing(true);
@@ -38,6 +38,7 @@ const ImageEditor: React.FC = () => {
       });
     };
 
+    // Handles the mouse move event to update the rectangle dimensions
     const handleMouseMove = (e: MouseEvent) => {
       if (isDrawing && rect) {
         const canvasRect = canvas.getBoundingClientRect();
@@ -50,21 +51,20 @@ const ImageEditor: React.FC = () => {
         };
         setRect(currentRect);
         drawRectangle(ctx, currentRect);
-      } else if (isDragging) {
-        const canvasRect = canvas.getBoundingClientRect();
       }
     };
 
+    // Handles the mouse up event to stop drawing and apply effects
     const handleMouseUp = () => {
       setIsDrawing(false);
       setIsDragging(false);
       if (ctx && rect) {
-        // Center the rectangle and apply exposure effect
         applyEffects(ctx, rect);
-        setImageDataUrl(canvas.toDataURL()); // Set the image data URL
+        setImageDataUrl(canvas.toDataURL());
       }
     };
 
+    // Event listeners for mouse events
     canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseup', handleMouseUp);
@@ -76,15 +76,14 @@ const ImageEditor: React.FC = () => {
     };
   }, [rect, isDrawing, isDragging]);
 
+  // Function to draw the rectangle on the canvas
   const drawRectangle = (ctx: CanvasRenderingContext2D, rect: Rect) => {
     const img = imgRef.current;
     if (!img) return;
 
-    // Draw the image on the canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    // Draw the rectangle
     ctx.strokeStyle = 'red';
     ctx.lineWidth = 2;
     ctx.strokeRect(
@@ -95,17 +94,15 @@ const ImageEditor: React.FC = () => {
     );
   };
 
+  // Function to apply effects to the image outside the rectangle
   const applyEffects = (ctx: CanvasRenderingContext2D, rect: Rect) => {
     const img = imgRef.current;
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    // Draw the original image
     ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    // Apply exposure effect to the original image outside the rectangle
     const imageData = ctx.getImageData(
       0,
       0,
@@ -123,9 +120,9 @@ const ImageEditor: React.FC = () => {
       for (let x = 0; x < ctx.canvas.width; x++) {
         if (x < startX || x > endX || y < startY || y > endY) {
           const index = (y * ctx.canvas.width + x) * 4;
-          data[index] = data[index] * 0.3; // Reducing exposure
-          data[index + 1] = data[index + 1] * 0.3; // Reducing exposure
-          data[index + 2] = data[index + 2] * 0.3; // Reducing exposure
+          data[index] *= 0.3; // Reducing exposure
+          data[index + 1] *= 0.3; // Reducing exposure
+          data[index + 2] *= 0.3; // Reducing exposure
         }
       }
     }
@@ -133,18 +130,16 @@ const ImageEditor: React.FC = () => {
     ctx.putImageData(imageData, 0, 0);
   };
 
+  // Function to handle the image load and set the canvas size
   const handleImageLoad = () => {
     const img = imgRef.current;
-    console.log('Image loaded:', img?.width, img?.height);
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
     const updateCanvasSize = () => {
-        console.log('page load');
-
       const aspectRatio = img.width / img.height;
-      const maxWidth = window.innerWidth * 0.9; // Maximum width as 90% of window width
-      const maxHeight = window.innerHeight * 0.9; // Maximum height as 90% of window height
+      const maxWidth = window.innerWidth * 0.9; // Max width as 90% of window width
+      const maxHeight = window.innerHeight * 0.9; // Max height as 90% of window height
 
       let newWidth = img.width;
       let newHeight = img.height;
@@ -161,16 +156,14 @@ const ImageEditor: React.FC = () => {
 
       canvas.width = img.width;
       canvas.height = img.height;
-      console.log('canvas width', canvas.width, canvas.height, img.width, img.height);
       canvas.style.width = `${img.width}px`;
       canvas.style.height = `${img.height}px`;
-
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, img.width, img.height);
-        setImageDataUrl(canvas.toDataURL()); // Set the initial image data URL
+        setImageDataUrl(canvas.toDataURL());
       }
     };
 
@@ -182,55 +175,43 @@ const ImageEditor: React.FC = () => {
     };
   };
 
+  // Function to save the edited image
   const handleSaveImage = () => {
     if (!imageDataUrl) return;
     if (!rect) {
       alert('Please select a region to save the image.');
       return;
     }
-    console.log('Saving image...');
-    // Calculate the scaling factors
+
     const img = imgRef.current;
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
-    const scaleX = img.width / canvas.width;
-    const scaleY = img.height / canvas.height;
 
-    // ??? have to decide if i should scale the rect or not
-
-    // Scale the rect coordinates
-    // const scaledRect = {
-    //   startX: rect.startX * scaleX,
-    //   startY: rect.startY * scaleY,
-    //   width: rect.width * scaleX,
-    //   height: rect.height * scaleY
-    // };
-    console.log('Scaled rect:', rect, canvas.width, canvas.height);
     const link = document.createElement('a');
     link.href = imageDataUrl;
     link.download = 'edited-image.png';
-    link.click(); 
+    link.click();
   };
 
+  // Function to save the edited image and rectangle to the database
   const handleSaveToDB = async () => {
-    console.log('Saving image to the database...');
     if (!imageDataUrl || !rect) return;
 
     const img = imgRef.current;
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
 
-    // Calculate the scaling factors
     const scaleX = img.width / canvas.width;
     const scaleY = img.height / canvas.height;
 
-    // Scale the rect coordinates
     const scaledRect = {
       startX: rect.startX * scaleX,
       startY: rect.startY * scaleY,
       width: rect.width * scaleX,
       height: rect.height * scaleY
     };
+
+    console.log('Scaled Rect:', scaledRect, scaleX, scaleY,canvas.width,canvas.height, img.width, img.height);
 
     try {
       await axios.post('/api/save-image', {
@@ -245,7 +226,6 @@ const ImageEditor: React.FC = () => {
       alert('Failed to save image to the database.');
     }
   };
-
 
   return (
     <div style={{ position: 'relative', maxWidth: '100%', margin: '0 auto' }}>
